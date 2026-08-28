@@ -1,0 +1,11 @@
+apiVersion: infra.milindsisodiya.dev/v1alpha1
+kind: GPUHealthPolicy
+metadata:
+  name: default-gpu-nodes
+spec:
+  nodeSelector:
+    node-role/gpu: "true"
+  checkIntervalSeconds: 30
+  xidErrorThreshold: 5
+  eccErrorThreshold: 10
+  action: drain

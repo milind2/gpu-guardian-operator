@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-guardian-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-guardian-operator
+  namespace: gpu-guardian-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-guardian-operator
+  template:
+    metadata:
+      labels:
+        app: gpu-guardian-operator
+    spec:
+      serviceAccountName: gpu-guardian-operator
+      containers:
+        - name: manager
+          image: ghcr.io/milind2/gpu-guardian-operator:latest
+          ports:
+            - containerPort: 8080
+              name: metrics
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-guardian-operator-metrics
+  namespace: gpu-guardian-system
+  labels:
+    app: gpu-guardian-operator
+spec:
+  selector:
+    app: gpu-guardian-operator
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: 8080
