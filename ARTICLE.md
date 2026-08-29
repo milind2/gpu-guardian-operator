@@ -174,6 +174,8 @@ GPU device -> telemetry collector [privileged boundary]
     -> Kubernetes API -> Health controller -> Node remediation
 ```
 
+A reference implementation of this component's publishing half -- `simulated-health-reporter` -- is included in the repository and exercised end-to-end in Section 7.2 and `DEMO.md`; it polls a telemetry source and publishes the corresponding node annotations exactly as a real collector would, with only the telemetry source itself (a file rather than a DCGM/nvidia-smi query) simulated.
+
 The controller does not require direct GPU-device access. This provides two advantages: the privileged component has a narrowly defined responsibility (acquiring accelerator telemetry), and the remediation controller operates with substantially smaller host-level privileges. Components are separated according to privilege boundaries rather than solely according to functional convenience.
 
 ## 3.5 Declarative Health Policy
@@ -466,7 +468,7 @@ As stated in Section 4, the experiments were not performed against a live multi-
 
 ## 7.2 Synthetic GPU Health Signals
 
-The Section 4 microbenchmarks use synthetic health signals rather than actual DCGM-generated GPU faults, so those measurements characterize the policy evaluation mechanism rather than the complete telemetry pipeline. Separately from the benchmarks, the repository includes a runnable end-to-end demonstration (`DEMO.md`, `demo/simulate-gpu-fault.sh`) that exercises the full detection-to-remediation control loop -- policy evaluation, cordoning, event emission, idempotency -- against a real Kubernetes API server (a local `kind` cluster), by writing synthetic node annotations in place of a real DCGM collector's output. This demonstrates the reconciler's correctness end-to-end without requiring GPU hardware, but it is not a substitute for validating the (not-included) DCGM/nvidia-smi collector against real hardware, which remains future work (Section 8.3).
+The Section 4 microbenchmarks use synthetic health signals rather than actual DCGM-generated GPU faults, so those measurements characterize the policy evaluation mechanism rather than the complete telemetry pipeline. Separately from the benchmarks, the repository includes a runnable end-to-end demonstration (`DEMO.md`) that exercises the full pipeline -- signal, telemetry publishing, policy evaluation, cordoning, event emission, idempotency -- against a real Kubernetes API server (a local `kind` cluster), with every stage represented by real running software: `cmd/simulated-health-reporter` polls a signal source and publishes the corresponding node annotations exactly as the architecture in Section 3.4 describes, and `gpu-guardian-operator` consumes them unmodified. Only the telemetry source itself -- a JSON file a human edits, rather than a `nvidia-smi -q -x`/DCGM query -- is simulated; the publishing mechanism, the RBAC shape, the annotation contract, and the operator's response to it are all real and were confirmed to interoperate correctly (verified by inspecting the exact HTTP request the reporter issues against a Kubernetes API server, not merely by reading the source). This is a stronger claim than "the reconciler was tested in isolation": it demonstrates that the annotation contract between an as-yet-unbuilt real collector and the existing operator is already correct and exercised, leaving only the telemetry-source substitution (file read -> DCGM/nvidia-smi query) as remaining work (Section 8.3), rather than an unvalidated integration point.
 
 ## 7.3 Unvalidated Polling-vs-Watch Comparison
 
@@ -492,7 +494,7 @@ The current remediation model operates at the node level and does not distinguis
 
 **8.2 Polling vs. informer-based evaluation.** A controlled `client-go`/informer-based reimplementation of the same policy engine, compared on CPU consumption, API-server request volume, memory consumption, state-change reaction time, steady-state idle cost, and behavior under high node churn -- turning the Section 3.7/6.3 architectural hypothesis into an experimentally testable result.
 
-**8.3 Fault injection with real hardware.** The repository's `DEMO.md` already exercises the detection-to-remediation path end to end using synthetic node annotations (Section 7.2); the remaining gap is validating the same path against a real DCGM/nvidia-smi collector and real, controlled GPU faults (XID events, ECC errors, thermal throttling, repeated health-state transitions) rather than hand-written signals.
+**8.3 Real DCGM/nvidia-smi telemetry source.** `cmd/simulated-health-reporter`'s publishing half (poll a source, patch node annotations, RBAC, DaemonSet shape) is already built and exercised end-to-end (Section 7.2, `DEMO.md`). The remaining work is narrowly scoped: replace its `readSignal()` file read with a real `nvidia-smi -q -x` or DCGM query, and validate the resulting signal against real, controlled GPU faults (XID events, ECC errors, thermal throttling, repeated health-state transitions) on real hardware.
 
 **8.4 Workload-aware remediation.** Distinguishing workload classes so remediation can protect critical inference workloads, evict interruptible batch workloads, prevent new GPU scheduling, and replace nodes as appropriate, rather than treating all workloads on an unhealthy node identically.
 

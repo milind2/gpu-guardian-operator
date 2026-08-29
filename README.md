@@ -36,9 +36,11 @@ automatic instead of quiet and manual.
   size and dependency surface.
 - **Signal comes from node annotations, not host access.** The operator
   itself never touches `/dev/nvidia*` or runs `nvidia-smi`. A separate
-  DaemonSet (not included here, but the shape is straightforward — a sidecar
-  that runs `nvidia-smi -q -x`, parses Xid/ECC counters, and republishes
-  them as node annotations) does that instead. This keeps the operator's
+  DaemonSet does that instead -- `cmd/simulated-health-reporter` is a
+  real, runnable version of that DaemonSet's publishing half (poll a
+  source, patch node annotations); it reads a JSON file rather than
+  real DCGM/nvidia-smi output, which is the one piece not yet built (see
+  "What I'd add next"). This keeps the operator's
   RBAC and container image minimal, and keeps privileged GPU host access
   scoped to a single-purpose component that's easy to reason about
   independently.
@@ -116,22 +118,27 @@ curl localhost:8080/metrics
 
 ## End-to-end demo without real GPU hardware
 
-This repository does not include the DCGM/nvidia-smi telemetry collector
-that would populate node annotations from real GPU hardware (see "What
-I'd add next" below) -- so out of the box, there's no way to see the
-full detection-to-remediation loop actually trigger. [`DEMO.md`](./DEMO.md)
-walks through a complete, real, working alternative: a synthetic signal
-generator ([`demo/simulate-gpu-fault.sh`](./demo/simulate-gpu-fault.sh))
-that writes the same node annotations a real collector would, against a
-local `kind` cluster, so you can watch the operator actually detect and
-cordon a node end-to-end -- no GPUs required.
+This repository includes `simulated-health-reporter`
+(`cmd/simulated-health-reporter`), a real Go binary structurally
+identical to what a DCGM/nvidia-smi-based collector would be -- it
+polls a telemetry source and publishes the result as node annotations --
+with only the telemetry source itself replaced by a JSON file you edit
+by hand instead of real GPU hardware. [`DEMO.md`](./DEMO.md) walks
+through the complete pipeline end-to-end against a local `kind` cluster:
+edit the signal file, watch the reporter publish it, watch the operator
+detect and cordon the node in response. Every stage in the paper's
+architecture diagram is exercised by real running software; only the
+telemetry *source* (file vs. real hardware) is simulated.
 
 ## What I'd add next
 
 - Watch-based reconciliation (informers) instead of polling, once this
   needs to react in sub-second time or manage more resource kinds.
-- A reference implementation of the node-health-reporting DaemonSet this
-  operator assumes exists.
+- Real DCGM/nvidia-smi integration for `simulated-health-reporter` --
+  today it reads a JSON file a human edits; a production version would
+  parse real GPU telemetry instead. The publishing half of that pipeline
+  (annotations, RBAC, DaemonSet shape) already exists and is exercised
+  end-to-end in `DEMO.md`; only the telemetry-source half is left.
 - Multi-tenancy awareness — today remediation is all-or-nothing per node;
   a natural next step is cordoning workload classes selectively (e.g.
   draining best-effort batch jobs before evicting latency-sensitive

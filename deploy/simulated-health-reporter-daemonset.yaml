@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simulated-gpu-signal
+  namespace: gpu-guardian-system
+data:
+  # Edit this ConfigMap (kubectl edit configmap simulated-gpu-signal -n
+  # gpu-guardian-system) to change the running fault-simulation and
+  # observe gpu-guardian-operator react within one of its own reconcile
+  # intervals -- the same mechanism DEMO.md's local walkthrough uses,
+  # applied here as a real, deployed DaemonSet instead of a local process.
+  signal.json: |
+    {"xidErrors": 0, "eccErrors": 0, "thermalThrottle": false}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: simulated-health-reporter
+  namespace: gpu-guardian-system
+  labels:
+    app: simulated-health-reporter
+spec:
+  selector:
+    matchLabels:
+      app: simulated-health-reporter
+  template:
+    metadata:
+      labels:
+        app: simulated-health-reporter
+    spec:
+      serviceAccountName: simulated-health-reporter
+      # In a real deployment this DaemonSet would carry the same
+      # node-role/gpu=true nodeSelector and nvidia.com/gpu taint
+      # toleration as the workloads it's reporting health for (see
+      # terraform-aws-eks-gpu-nodepool's provisioning convention), so it
+      # only runs on GPU nodes. Left unset here so the demo works on a
+      # single-node kind cluster with no GPU labels applied yet.
+      containers:
+        - name: reporter
+          image: ghcr.io/milind2/gpu-guardian-operator/simulated-health-reporter:latest
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: SIGNAL_FILE
+              value: /etc/simulated-gpu-signal/signal.json
+          volumeMounts:
+            - name: signal-config
+              mountPath: /etc/simulated-gpu-signal
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+      volumes:
+        - name: signal-config
+          configMap:
+            name: simulated-gpu-signal

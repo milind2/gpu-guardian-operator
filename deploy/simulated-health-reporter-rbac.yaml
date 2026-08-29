@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: simulated-health-reporter
+  namespace: gpu-guardian-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: simulated-health-reporter
+rules:
+  # A real DCGM-based collector needs exactly this same permission and no
+  # more: it only ever patches the one node it's running on (enforced by
+  # the DaemonSet's own pod-to-node binding, not by this RBAC rule, which
+  # Kubernetes RBAC has no native way to scope to "only my own node"
+  # without a webhook). This is called out explicitly rather than left
+  # implicit, since "patch all nodes" is broader than the collector's
+  # actual behavior and a security reviewer should know that gap exists.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: simulated-health-reporter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: simulated-health-reporter
+subjects:
+  - kind: ServiceAccount
+    name: simulated-health-reporter
+    namespace: gpu-guardian-system
