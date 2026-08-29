@@ -26,7 +26,9 @@ automatic instead of quiet and manual.
   reconciler, Prometheus metrics — is built on Go's standard library only.
   No `client-go`, no `controller-runtime`. That's a deliberate trade-off:
   a poll-based loop instead of watch-based informers, in exchange for a
-  ~2MB static binary, a trivially auditable supply chain, and a build that
+  a 5.62MB stripped static binary (measured under Go 1.22.2, linux/amd64;
+  see the paper's Section 4.5 and REPRODUCTION.md for the exact build
+  commands), a trivially auditable supply chain, and a build that
   works with nothing but `go build`. For a larger operator managing many
   resource types at high churn, I'd reach for `controller-runtime`'s
   informer/cache machinery instead — the tradeoff flips once watch
@@ -111,6 +113,18 @@ curl localhost:8080/metrics
 # gpu_guardian_node_healthy{node="gpu-node-1"} 1
 # gpu_guardian_remediations_total{action="drain"} 1
 ```
+
+## End-to-end demo without real GPU hardware
+
+This repository does not include the DCGM/nvidia-smi telemetry collector
+that would populate node annotations from real GPU hardware (see "What
+I'd add next" below) -- so out of the box, there's no way to see the
+full detection-to-remediation loop actually trigger. [`DEMO.md`](./DEMO.md)
+walks through a complete, real, working alternative: a synthetic signal
+generator ([`demo/simulate-gpu-fault.sh`](./demo/simulate-gpu-fault.sh))
+that writes the same node annotations a real collector would, against a
+local `kind` cluster, so you can watch the operator actually detect and
+cordon a node end-to-end -- no GPUs required.
 
 ## What I'd add next
 
