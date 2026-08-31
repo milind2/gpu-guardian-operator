@@ -97,7 +97,7 @@ func (c *Client) do(method, path string, body any, out any) error {
 	}
 	switch method {
 	case http.MethodPatch:
-		req.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+		req.Header.Set("Content-Type", "application/merge-patch+json")
 	default:
 		req.Header.Set("Content-Type", "application/json")
 	}
